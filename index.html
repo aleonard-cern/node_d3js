@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+    <style>
+        .bar rect {
+            fill: steelblue;
+        }
+
+        .dot circle {
+            fill: white;
+            r: 3;
+            stroke: black;
+            stroke-width: 1;
+            transition: r 0.25s ease, fill 0.5s ease;
+        }
+
+        .dot circle:hover {
+            fill: red;
+            r: 20;
+        }
+
+        .bar text {
+            fill: #fff;
+            font: 10px sans-serif;
+        }
+
+        svg {
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+</head>
+
+<body>
+    <div class="jumbotron text-center">
+        <h1>My First Bootstrap Page</h1>
+        <p>Resize this responsive page to see the effect!</p>
+    </div>
+    <div class="container">
+        <div class="row">
+            <div class="col-sm-12">
+                <div id="figure"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class Histogram {
+            constructor(nBins, xMin, xMax) {
+                this.nBins = nBins;
+                this.xMin = xMin;
+                this.xMax = xMax;
+                this._computeBinSize();
+                this._initHistData();
+            }
+
+            _computeBinSize() {
+                this.binSize = (this.xMax - this.xMin) / this.nBins;
+            }
+
+            _initHistData() {
+                this.histData = new Array(this.nBins);
+                for (var i = 0; i < this.nBins; i++) {
+                    this.histData[i] = {
+                        xLow: i * this.binSize + this.xMin,
+                        xHigh: (i + 1) * this.binSize + this.xMin,
+                        content: 0,
+                        entries: []
+                    };
+                };
+            }
+
+            fill(data) {
+              data.forEach((d) => {
+                  var bin = Math.floor((d - this.xMin) / this.binSize);
+                  if (bin >= 0 && bin < this.nBins) {
+                      this.histData[bin].entries.push(d);
+                      this.histData[bin].content++;
+                  }
+              });
+            }
+
+        }
+
+
+        var data = d3.range(10000).map(d3.randomNormal(10, 1));
+        console.log(data);
+
+        var minbin = 2;
+        var maxbin = 18;
+        var numbins = 43;
+
+        let h = new Histogram(numbins, minbin, maxbin);
+        h.fill(data);
+
+
+        // whitespace on either side of the bars in units of MPG
+        var binmargin = .005;
+        var margin = {
+            top: 30,
+            right: 30,
+            bottom: 40,
+            left: 50
+        };
+        var width = 450 - margin.left - margin.right;
+        var height = 350 - margin.top - margin.bottom;
+
+        // This scale is for determining the widths of the histogram bars
+        // Must start at 0 or else x(binsize a.k.a dx) will be negative
+        var x = d3.scaleLinear()
+            .domain([0, (h.xMax + 1) - (h.xMin - 1)])
+            .range([0, width]);
+
+        // Scale for the placement of the bars
+        var x2 = d3.scaleLinear()
+            .domain([h.xMin, h.xMax])
+            .range([0, width]);
+
+
+        var y = d3.scaleLinear()
+            .domain([0, d3.max(h.histData, d => d.content)])
+            .range([height, 0]);
+
+        // put the graph in the "mpg" div
+        var svg = d3.select("#figure").append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," +
+                margin.top + ")");
+
+        // set up the bars
+        var bar = svg.selectAll(".bar")
+            .data(h.histData)
+            .enter().append("g")
+            .attr("class", "bar")
+            .attr("transform", function(d, i) {
+                return "translate(" +
+                    x2(i * h.binSize + minbin) + "," + y(d.content) + ")";
+            })
+
+        var dot = svg.selectAll(".dot")
+            .data(h.histData)
+            .enter().append("g")
+            .attr("class", "dot")
+            .attr("transform", function(d, i) {
+                return "translate(" +
+                    x2((i + 0.5) * h.binSize + minbin) + ", 0)";
+            })
+
+        // add rectangles of correct size at correct location
+        bar.append("rect")
+            .attr("x", x(binmargin))
+            .attr("width", x(h.binSize - 2 * binmargin))
+            .attr("height", function(d) {
+                return height - y(d.content);
+            });
+
+        dot.append("circle")
+            .attr("cx", x(binmargin))
+            .attr("cy", d => y(d.content))
+            
+        // add the x axis and x-label
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x2));
+        svg.append("text")
+            .attr("class", "xlabel")
+            .attr("text-anchor", "middle")
+            .attr("x", width / 2)
+            .attr("y", height + 0.9 * margin.bottom)
+            .text("QI");
+
+        // add the y axis and y-label
+        svg.append("g")
+            .attr("class", "y axis")
+            .attr("transform", "translate(0,0)")
+            .call(d3.axisLeft(y));
+        svg.append("text")
+            .attr("class", "ylabel")
+            .attr("y", 0 - margin.left) // x and y switched due to rotation
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .attr("transform", "rotate(-90)")
+            .style("text-anchor", "middle")
+            .text("# of fill-ups");
+    </script>
+</body>
+
+</html>
