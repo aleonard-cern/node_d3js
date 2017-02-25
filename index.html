@@ -12,11 +12,20 @@
     <style>
         .bar rect {
             fill: steelblue;
+            transition: fill 0.5s ease;
+            display: none;
+        }
+
+        .bar rect:hover {
+            fill: darkblue;
+        }
+
+        .errH rect {
+            fill: black;
         }
 
         .dot circle {
             fill: white;
-            r: 3;
             stroke: black;
             stroke-width: 1;
             transition: r 0.25s ease, fill 0.5s ease;
@@ -60,12 +69,24 @@
                 this.nBins = nBins;
                 this.xMin = xMin;
                 this.xMax = xMax;
+                this.margin = {
+                    top: 30,
+                    right: 30,
+                    bottom: 40,
+                    left: 60
+                };
+                this.xTitle = "Length (m)";
+                this.yTitle = "# of fill-ups";
                 this._computeBinSize();
+                this.binMargin = this.binsize;
                 this._initHistData();
+                this.markerSize = 3;
             }
 
             _computeBinSize() {
-                this.binSize = (this.xMax - this.xMin) / this.nBins;
+                console.log(this.xMax + "  " + this.xMin + "  " + this.nBins);
+                console.log("binsize : " + (this.xMax - this.xMin) * 1.0 / this.nBins);
+                this.binSize = (this.xMax - this.xMin) * 1.0 / this.nBins;
             }
 
             _initHistData() {
@@ -81,120 +102,138 @@
             }
 
             fill(data) {
-              data.forEach((d) => {
-                  var bin = Math.floor((d - this.xMin) / this.binSize);
-                  if (bin >= 0 && bin < this.nBins) {
-                      this.histData[bin].entries.push(d);
-                      this.histData[bin].content++;
-                  }
-              });
+                data.forEach((d) => {
+                    var bin = Math.floor((d - this.xMin) / this.binSize);
+                    if (bin >= 0 && bin < this.nBins) {
+                        this.histData[bin].entries.push(d);
+                        this.histData[bin].content++;
+                    }
+                });
+            }
+
+            draw(divElement, width, height) {
+
+                // put the graph in the "mpg" div
+                var svg = d3.select(divElement).append("svg")
+                    .attr("width", width + this.margin.left + this.margin.right)
+                    .attr("height", height + this.margin.top + this.margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(" + this.margin.left + "," +
+                        this.margin.top + ")");
+
+                // This scale is for determining the widths of the histogram bars
+                // Must start at 0 or else x(binsize a.k.a dx) will be negative
+                var x = d3.scaleLinear()
+                    .domain([0, (this.xMax) - (this.xMin)])
+                    .range([0, width]);
+
+                // Scale for the placement of the bars
+                var x2 = d3.scaleLinear()
+                    .domain([this.xMin, this.xMax])
+                    .range([0, width]);
+
+
+                var y = d3.scaleLinear()
+                    .domain([0, d3.max(this.histData, d => d.content + Math.sqrt(d.content))])
+                    .range([height, 0]);
+
+                console.log("0 is sent on: " + y(0));
+                console.log("1 is sent on: " + y(1));
+                console.log(d3.max(this.histData, d => d.content + Math.sqrt(d.content)) + " is sent on: " + y(d3.max(this.histData, d => d.content + Math.sqrt(d.content))));
+
+                // set up the bars
+                var bar = svg.selectAll(".bar")
+                    .data(this.histData)
+                    .enter().append("g")
+                    .attr("class", "bar")
+                    .attr("transform", (d, i) => {
+                        return "translate(" +
+                            x2(d.xLow + 0.01 * this.binSize) + "," + y(d.content) + ")";
+                    })
+                var errH = svg.selectAll(".errH")
+                    .data(this.histData)
+                    .enter().append("g")
+                    .attr("class", "errH")
+                    .attr("transform", (d, i) => {
+                        return "translate(" +
+                              x2(d.xLow) + "," + 0 + ")";
+                    })
+
+                var dot = svg.selectAll(".dot")
+                    .data(this.histData)
+                    .enter().append("g")
+                    .attr("class", "dot")
+                    .attr("transform", (d, i) => {
+                        return "translate(" +
+                            x2(d.xLow + 0.5 * (d.xHigh - d.xLow)) + "," + 0 + ")";
+                    })
+
+                //add rectangles of correct size at correct location
+                bar.append("rect")
+                    .attr("width", 0.98 * x(this.binSize))
+                    .attr("height", d => height - y(d.content))
+                .attr("x", x(this.binMargin))
+
+                dot.append("rect")
+                    .attr("x", -0.5 * 0.05 * x(this.binSize))
+                    .attr("y", d => y(d.content + Math.sqrt(d.content)))
+                    .attr("width", 0.05 * x(this.binSize))
+                    .attr("height", (d) => {
+                        return height - y(2 * Math.sqrt(d.content));
+                    })
+
+                errH.append("rect")
+                    .attr("x", 0)
+                    .attr("y", d => y(d.content) - 0.5 * 0.05 * x(this.binSize))
+                    .attr("width", x(this.binSize))
+                    .attr("height", 0.05 * x(this.binSize))
+
+                dot.append("circle")
+                    .attr("cx", 0)
+                    .attr("cy", d => y(d.content))
+                    .attr("r", this.markerSize)
+
+                // add the x axis and x-label
+                svg.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x2));
+
+                svg.append("text")
+                    .attr("class", "xlabel")
+                    .attr("text-anchor", "middle")
+                    .attr("x", width / 2)
+                    .attr("y", height + 0.9 * this.margin.bottom)
+                    .text(this.xTitle);
+
+                // add the y axis and y-label
+                svg.append("g")
+                    .attr("class", "y axis")
+                    .attr("transform", "translate(0,0)")
+                    .call(d3.axisLeft(y));
+
+                svg.append("text")
+                    .attr("class", "ylabel")
+                    .attr("y", 0 - this.margin.left) // x and y switched due to rotation
+                    .attr("x", 0 - (height / 2))
+                    .attr("dy", "1em")
+                    .attr("transform", "rotate(-90)")
+                    .style("text-anchor", "middle")
+                    .text(this.yTitle);
+
             }
 
         }
 
 
         var data = d3.range(10000).map(d3.randomNormal(10, 1));
+        //data = [10, 10, 10, 10, 6]
         console.log(data);
 
-        var minbin = 2;
-        var maxbin = 18;
-        var numbins = 43;
 
-        let h = new Histogram(numbins, minbin, maxbin);
+        let h = new Histogram(40, 4, 16);
         h.fill(data);
-
-
-        // whitespace on either side of the bars in units of MPG
-        var binmargin = .005;
-        var margin = {
-            top: 30,
-            right: 30,
-            bottom: 40,
-            left: 50
-        };
-        var width = 450 - margin.left - margin.right;
-        var height = 350 - margin.top - margin.bottom;
-
-        // This scale is for determining the widths of the histogram bars
-        // Must start at 0 or else x(binsize a.k.a dx) will be negative
-        var x = d3.scaleLinear()
-            .domain([0, (h.xMax + 1) - (h.xMin - 1)])
-            .range([0, width]);
-
-        // Scale for the placement of the bars
-        var x2 = d3.scaleLinear()
-            .domain([h.xMin, h.xMax])
-            .range([0, width]);
-
-
-        var y = d3.scaleLinear()
-            .domain([0, d3.max(h.histData, d => d.content)])
-            .range([height, 0]);
-
-        // put the graph in the "mpg" div
-        var svg = d3.select("#figure").append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-            .append("g")
-            .attr("transform", "translate(" + margin.left + "," +
-                margin.top + ")");
-
-        // set up the bars
-        var bar = svg.selectAll(".bar")
-            .data(h.histData)
-            .enter().append("g")
-            .attr("class", "bar")
-            .attr("transform", function(d, i) {
-                return "translate(" +
-                    x2(i * h.binSize + minbin) + "," + y(d.content) + ")";
-            })
-
-        var dot = svg.selectAll(".dot")
-            .data(h.histData)
-            .enter().append("g")
-            .attr("class", "dot")
-            .attr("transform", function(d, i) {
-                return "translate(" +
-                    x2((i + 0.5) * h.binSize + minbin) + ", 0)";
-            })
-
-        // add rectangles of correct size at correct location
-        bar.append("rect")
-            .attr("x", x(binmargin))
-            .attr("width", x(h.binSize - 2 * binmargin))
-            .attr("height", function(d) {
-                return height - y(d.content);
-            });
-
-        dot.append("circle")
-            .attr("cx", x(binmargin))
-            .attr("cy", d => y(d.content))
-            
-        // add the x axis and x-label
-        svg.append("g")
-            .attr("class", "x axis")
-            .attr("transform", "translate(0," + height + ")")
-            .call(d3.axisBottom(x2));
-        svg.append("text")
-            .attr("class", "xlabel")
-            .attr("text-anchor", "middle")
-            .attr("x", width / 2)
-            .attr("y", height + 0.9 * margin.bottom)
-            .text("QI");
-
-        // add the y axis and y-label
-        svg.append("g")
-            .attr("class", "y axis")
-            .attr("transform", "translate(0,0)")
-            .call(d3.axisLeft(y));
-        svg.append("text")
-            .attr("class", "ylabel")
-            .attr("y", 0 - margin.left) // x and y switched due to rotation
-            .attr("x", 0 - (height / 2))
-            .attr("dy", "1em")
-            .attr("transform", "rotate(-90)")
-            .style("text-anchor", "middle")
-            .text("# of fill-ups");
+        h.draw("#figure", 600, 450);
     </script>
 </body>
 
