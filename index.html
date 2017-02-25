@@ -87,14 +87,14 @@
                 this.xTitle = "Length (m)";
                 this.yTitle = "# of fill-ups";
                 this._computeBinSize();
-                this.binMargin = this.binsize;
                 this._initHistData();
                 this.markerSize = 3;
+                this.nEntries = 0;
+                this.sum = 0;
+                this.sum2 = 0;
             }
 
             _computeBinSize() {
-                console.log(this.xMax + "  " + this.xMin + "  " + this.nBins);
-                console.log("binsize : " + (this.xMax - this.xMin) * 1.0 / this.nBins);
                 this.binSize = (this.xMax - this.xMin) * 1.0 / this.nBins;
             }
 
@@ -116,11 +116,15 @@
                     if (bin >= 0 && bin < this.nBins) {
                         this.histData[bin].entries.push(d);
                         this.histData[bin].content++;
+                        this.nEntries++;
+                        this.sum += d;
+                        this.sum2 += d * d;
                     }
                 });
             }
 
-            _createSVG(divElement, width, height) {
+            _recreateSVG(divElement, width, height) {
+                d3.select(divElement).select("svg").remove();
                 return d3.select(divElement).append("svg")
                     .attr("width", width + this.margin.left + this.margin.right)
                     .attr("height", height + this.margin.top + this.margin.bottom)
@@ -131,8 +135,9 @@
 
             draw(divElement, width, height, opt) {
 
+
                 // put the graph in the "mpg" div
-                var svg = this._createSVG(divElement, width, height);
+                var svg = this._recreateSVG(divElement, width, height);
 
                 // This scale is for determining the widths of the histogram bars
                 // Must start at 0 or else x(binsize a.k.a dx) will be negative
@@ -172,9 +177,9 @@
                 //add rectangles of correct size at correct location
                 if (typeof opt === 'undefined' || typeof opt.fill === 'undefined' || opt.fill) {
                     bar.append("rect")
+                        .attr("x", 0.01 * x(this.binSize))
                         .attr("width", 0.98 * x(this.binSize))
                         .attr("height", d => height - y(d.content))
-                        .attr("x", x(this.binMargin))
                 }
 
                 if (typeof opt !== 'undefined' && typeof opt.errV !== 'undefined' && opt.errV) {
@@ -227,6 +232,18 @@
                     .style("text-anchor", "middle")
                     .text(this.yTitle);
 
+                svg.append("text")
+                    .attr("x", 0.8 * width)
+                    .attr("y", 0)
+                    .style("text-anchor", "right")
+                    .text((this.sum * 1.0 / this.nEntries).toFixed(3))
+
+                svg.append("text")
+                    .attr("x", 0.8 * width)
+                    .attr("y", 0.1 * height)
+                    .style("text-anchor", "right")
+                    .text((this.sum2 / this.nEntries - (this.sum * 1.0 / this.nEntries) * (this.sum * 1.0 / this.nEntries)).toFixed(3))
+
                 if (typeof opt !== 'undefined' && typeof opt.gridX !== 'undefined' && opt.gridX) {
                     // gridlines in x axis function
                     function make_x_gridlines() {
@@ -266,21 +283,23 @@
 
         }
 
+        function generateHistogram() {
+            var data = d3.range(10000).map(d3.randomNormal(10, 1));
 
-        var data = d3.range(10000).map(d3.randomNormal(10, 1));
-        //data = [10, 10, 10, 10, 6]
-        console.log(data);
+            let h = new Histogram(50, 5, 15);
+            h.fill(data);
+            h.draw("#figure", 600, 450, {
+                fill: false,
+                errV: true,
+                errH: true,
+                marker: true,
+                gridX: false,
+                gridY: false
+            });
+        }
+        generateHistogram();
+        setInterval(generateHistogram, 1000);
 
-
-        let h = new Histogram(40, 8, 12);
-        h.fill(data);
-        h.draw("#figure", 600, 450, {
-            errV: false,
-            fill: true,
-            marker: false,
-            gridX: false,
-            gridY: true
-        });
         // h.draw("#figure", 600, 450, {
         //     errH: false,
         //     errV: true,
