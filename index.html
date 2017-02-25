@@ -13,7 +13,6 @@
         .bar rect {
             fill: steelblue;
             transition: fill 0.5s ease;
-            display: none;
         }
 
         .bar rect:hover {
@@ -39,6 +38,16 @@
         .bar text {
             fill: #fff;
             font: 10px sans-serif;
+        }
+
+        .grid line {
+            stroke: lightgrey;
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+
+        .grid path {
+            stroke-width: 0;
         }
 
         svg {
@@ -111,15 +120,19 @@
                 });
             }
 
-            draw(divElement, width, height) {
-
-                // put the graph in the "mpg" div
-                var svg = d3.select(divElement).append("svg")
+            _createSVG(divElement, width, height) {
+                return d3.select(divElement).append("svg")
                     .attr("width", width + this.margin.left + this.margin.right)
                     .attr("height", height + this.margin.top + this.margin.bottom)
                     .append("g")
                     .attr("transform", "translate(" + this.margin.left + "," +
                         this.margin.top + ")");
+            }
+
+            draw(divElement, width, height, opt) {
+
+                // put the graph in the "mpg" div
+                var svg = this._createSVG(divElement, width, height);
 
                 // This scale is for determining the widths of the histogram bars
                 // Must start at 0 or else x(binsize a.k.a dx) will be negative
@@ -137,62 +150,55 @@
                     .domain([0, d3.max(this.histData, d => d.content + Math.sqrt(d.content))])
                     .range([height, 0]);
 
-                console.log("0 is sent on: " + y(0));
-                console.log("1 is sent on: " + y(1));
-                console.log(d3.max(this.histData, d => d.content + Math.sqrt(d.content)) + " is sent on: " + y(d3.max(this.histData, d => d.content + Math.sqrt(d.content))));
-
                 // set up the bars
                 var bar = svg.selectAll(".bar")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "bar")
-                    .attr("transform", (d, i) => {
-                        return "translate(" +
-                            x2(d.xLow + 0.01 * this.binSize) + "," + y(d.content) + ")";
-                    })
+                    .attr("transform", d => "translate(" + x2(d.xLow + 0.01 * this.binSize) + "," + y(d.content) + ")")
+
                 var errH = svg.selectAll(".errH")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "errH")
-                    .attr("transform", (d, i) => {
-                        return "translate(" +
-                              x2(d.xLow) + "," + 0 + ")";
-                    })
+                    .attr("transform", d => "translate(" + x2(d.xLow) + "," + 0 + ")")
 
                 var dot = svg.selectAll(".dot")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "dot")
-                    .attr("transform", (d, i) => {
-                        return "translate(" +
-                            x2(d.xLow + 0.5 * (d.xHigh - d.xLow)) + "," + 0 + ")";
-                    })
+                    .attr("transform", d => "translate(" + x2(d.xLow + 0.5 * this.binSize) + "," + 0 + ")")
 
                 //add rectangles of correct size at correct location
-                bar.append("rect")
-                    .attr("width", 0.98 * x(this.binSize))
-                    .attr("height", d => height - y(d.content))
-                .attr("x", x(this.binMargin))
+                if (typeof opt === 'undefined' || typeof opt.fill === 'undefined' || opt.fill) {
+                    bar.append("rect")
+                        .attr("width", 0.98 * x(this.binSize))
+                        .attr("height", d => height - y(d.content))
+                        .attr("x", x(this.binMargin))
+                }
 
-                dot.append("rect")
-                    .attr("x", -0.5 * 0.05 * x(this.binSize))
-                    .attr("y", d => y(d.content + Math.sqrt(d.content)))
-                    .attr("width", 0.05 * x(this.binSize))
-                    .attr("height", (d) => {
-                        return height - y(2 * Math.sqrt(d.content));
-                    })
+                if (typeof opt !== 'undefined' && typeof opt.errV !== 'undefined' && opt.errV) {
+                    dot.append("rect")
+                        .attr("x", -0.5 * 0.05 * x(this.binSize))
+                        .attr("y", d => y(d.content + Math.sqrt(d.content)))
+                        .attr("width", 0.05 * x(this.binSize))
+                        .attr("height", d => height - y(2 * Math.sqrt(d.content)))
+                }
 
-                errH.append("rect")
-                    .attr("x", 0)
-                    .attr("y", d => y(d.content) - 0.5 * 0.05 * x(this.binSize))
-                    .attr("width", x(this.binSize))
-                    .attr("height", 0.05 * x(this.binSize))
+                if (typeof opt !== 'undefined' && typeof opt.errH !== 'undefined' && opt.errH) {
+                    errH.append("rect")
+                        .attr("x", 0)
+                        .attr("y", d => y(d.content) - 0.5 * 0.05 * x(this.binSize))
+                        .attr("width", x(this.binSize))
+                        .attr("height", 0.05 * x(this.binSize))
+                }
 
-                dot.append("circle")
-                    .attr("cx", 0)
-                    .attr("cy", d => y(d.content))
-                    .attr("r", this.markerSize)
-
+                if (typeof opt !== 'undefined' && typeof opt.marker !== 'undefined' && opt.marker) {
+                    dot.append("circle")
+                        .attr("cx", 0)
+                        .attr("cy", d => y(d.content))
+                        .attr("r", this.markerSize)
+                }
                 // add the x axis and x-label
                 svg.append("g")
                     .attr("class", "x axis")
@@ -221,6 +227,41 @@
                     .style("text-anchor", "middle")
                     .text(this.yTitle);
 
+                if (typeof opt !== 'undefined' && typeof opt.gridX !== 'undefined' && opt.gridX) {
+                    // gridlines in x axis function
+                    function make_x_gridlines() {
+                        return d3.axisBottom(x2)
+                            .ticks(10)
+
+
+                    }
+                    // add the X gridlines
+                    svg.append("g")
+                        .attr("class", "grid")
+                        .attr("transform", "translate(0," + height + ")")
+                        .call(make_x_gridlines()
+                            .tickSize(-height)
+                            .tickFormat("")
+                        )
+                }
+                if (typeof opt !== 'undefined' && typeof opt.gridY !== 'undefined' && opt.gridY) {
+
+                    // gridlines in y axis function
+                    function make_y_gridlines() {
+                        return d3.axisLeft(y)
+                            .ticks(10)
+                    }
+
+
+
+                    // add the Y gridlines
+                    svg.append("g")
+                        .attr("class", "grid")
+                        .call(make_y_gridlines()
+                            .tickSize(-width)
+                            .tickFormat("")
+                        )
+                }
             }
 
         }
@@ -231,9 +272,21 @@
         console.log(data);
 
 
-        let h = new Histogram(40, 4, 16);
+        let h = new Histogram(40, 8, 12);
         h.fill(data);
-        h.draw("#figure", 600, 450);
+        h.draw("#figure", 600, 450, {
+            errV: false,
+            fill: true,
+            marker: false,
+            gridX: false,
+            gridY: true
+        });
+        // h.draw("#figure", 600, 450, {
+        //     errH: false,
+        //     errV: true,
+        //     fill: true,
+        //     marker: false
+        // });
     </script>
 </body>
 
