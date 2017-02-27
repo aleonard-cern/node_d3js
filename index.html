@@ -70,9 +70,235 @@
                 <div id="figure"></div>
             </div>
         </div>
+        <div class="row">
+            <div class="col-sm-12">
+                <div id="figure_graph"></div>
+            </div>
+        </div>
     </div>
 
     <script>
+        class Graph {
+            constructor(dataX, dataY, dataErrX, dataErrY) {
+                this.margin = {
+                    top: 30,
+                    right: 30,
+                    bottom: 40,
+                    left: 60
+                };
+                this.markerSize = 3;
+                this.xTitle = "x (m)";
+                this.yTitle = "y (m)";
+                this.nPoints = Array.isArray(dataX) ? dataX.length : 1;
+                this._initData(dataX, dataY, dataErrX, dataErrY);
+
+            }
+            _initData(dataX, dataY, dataErrX, dataErrY) {
+                this.dataPoints = new Array(this.nPoints)
+                if (Array.isArray(dataX) === false) {
+                    dataX = [dataX];
+                    dataY = [dataY];
+                    dataErrX = [dataErrX];
+                    dataErrY = [dataErrY];
+                }
+                for (let i = 0; i < this.nPoints; i++) {
+                    this.dataPoints[i] = {
+                        x: dataX[i],
+                        y: dataY[i],
+                        errX: dataErrX[i],
+                        errY: dataErrY[i]
+                    }
+                }
+
+                this._computeLimits();
+
+            }
+
+            _computeLimits() {
+                this.xMin = d3.min(this.dataPoints, d => d.x - d.errX);
+                this.yMin = d3.min(this.dataPoints, d => d.y - d.errY);
+                this.xMax = d3.max(this.dataPoints, d => d.x + d.errX);
+                this.yMax = d3.max(this.dataPoints, d => d.y + d.errY);
+
+                this.xRange = (this.xMax - this.xMin);
+                this.yRange = (this.yMax - this.yMin);
+
+            }
+
+            addPoints(dataX, dataY, dataErrX, dataErrY) {
+                if (Array.isArray(dataX) === false) {
+                    dataX = [dataX];
+                    dataY = [dataY];
+                    dataErrX = [dataErrX];
+                    dataErrY = [dataErrY];
+                }
+                let nPoints = dataX.length;
+                for (let i = 0; i < nPoints; i++) {
+                    this.dataPoints.push({
+                        x: dataX[i],
+                        y: dataY[i],
+                        errX: dataErrX[i],
+                        errY: dataErrY[i]
+                    })
+                }
+                this.nPoints += nPoints;
+                this._computeLimits();
+
+            }
+
+            _createSVG(divElement, width, height, append) {
+                if (!append) d3.select(divElement).select("svg").remove();
+                return d3.select(divElement).append("svg")
+                    .attr("width", width + this.margin.left + this.margin.right)
+                    .attr("height", height + this.margin.top + this.margin.bottom)
+                    .append("g")
+                    .attr("transform", "translate(" + this.margin.left + "," +
+                        this.margin.top + ")");
+            }
+            draw(divElement, width, height, append, opt) {
+
+
+                // put the graph in the "mpg" div
+                let svg = this._createSVG(divElement, width, height, append);
+
+                // This scale is for determining the widths of the histogram bars
+                // Must start at 0 or else x(binsize a.k.a dx) will be negative
+                let x = d3.scaleLinear()
+                    .domain([this.xMin - 0.05 * this.xRange, this.xMax + 0.05 * this.xRange])
+                    .range([0, width]);
+
+                let y = d3.scaleLinear()
+                    .domain([this.yMin - 0.05 * this.yRange, this.yMax + 0.05 * this.yRange])
+                    .range([height, 0]);
+
+                // // set up the bars
+                // let bar = svg.selectAll(".bar")
+                //     .data(this.dataPoints)
+                //     .enter().append("g")
+                //     .attr("class", "bar")
+                //     .attr("transform", d => "translate(" + x(d.x) + "," + y(d.y) + ")")
+
+                let errH = svg.selectAll(".errH")
+                    .data(this.dataPoints)
+                    .enter().append("g")
+                    .attr("class", "errH")
+                    .attr("transform", d => "translate(" + x(d.x - d.errX) + ", 0)")
+
+                let dot = svg.selectAll(".dot")
+                    .data(this.dataPoints)
+                    .enter().append("g")
+                    .attr("class", "dot")
+                    .attr("transform", d => "translate(" + x(d.x) + ", 0)")
+
+                // //add rectangles of correct size at correct location
+                // if (typeof opt === 'undefined' || typeof opt.fill === 'undefined' || opt.fill) {
+                //     bar.append("rect")
+                //         .attr("x", 0.01 * x(this.binSize))
+                //         .attr("width", 0.98 * x(this.binSize))
+                //         .attr("height", d => height - y(d.content))
+                // }
+
+                //if (typeof opt !== 'undefined' && typeof opt.errV !== 'undefined' && opt.errV) {
+                    dot.append("rect")
+                        .attr("x", -0.5 )
+                        .attr("y", d => y(d.y + d.errY))
+                        .attr("width", 1)
+                        .attr("height", d => y(d.y - 2*d.errY) -  y(d.y))
+                //}
+
+                // if (typeof opt !== 'undefined' && typeof opt.errH !== 'undefined' && opt.errH) {
+                    errH.append("rect")
+                        .attr("x", 0)
+                        .attr("y", d => y(d.y) - 0.5)
+                        .attr("width", d => x(d.x + 2*d.errX) - x(d.x))
+                        .attr("height", 1)
+                // }
+
+                //if (typeof opt !== 'undefined' && typeof opt.marker !== 'undefined' && opt.marker) {
+                    dot.append("circle")
+                        .attr("cx", 0)
+                        .attr("cy", d => y(d.y))
+                        .attr("r", this.markerSize)
+                //}
+                // add the x axis and x-label
+                svg.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x));
+
+                svg.append("text")
+                    .attr("class", "xlabel")
+                    .attr("text-anchor", "middle")
+                    .attr("x", width / 2)
+                    .attr("y", height + 0.9 * this.margin.bottom)
+                    .text(this.xTitle);
+
+                // add the y axis and y-label
+                svg.append("g")
+                    .attr("class", "y axis")
+                    .attr("transform", "translate(0,0)")
+                    .call(d3.axisLeft(y));
+
+                svg.append("text")
+                    .attr("class", "ylabel")
+                    .attr("y", 0 - this.margin.left) // x and y switched due to rotation
+                    .attr("x", 0 - (height / 2))
+                    .attr("dy", "1em")
+                    .attr("transform", "rotate(-90)")
+                    .style("text-anchor", "middle")
+                    .text(this.yTitle);
+
+                // svg.append("text")
+                //     .attr("x", 0.8 * width)
+                //     .attr("y", 0)
+                //     .style("text-anchor", "right")
+                //     .text((this.sum * 1.0 / this.nEntries).toFixed(3))
+                //
+                // svg.append("text")
+                //     .attr("x", 0.8 * width)
+                //     .attr("y", 0.1 * height)
+                //     .style("text-anchor", "right")
+                //     .text((this.sum2 / this.nEntries - (this.sum * 1.0 / this.nEntries) * (this.sum * 1.0 / this.nEntries)).toFixed(3))
+                //
+                // if (typeof opt !== 'undefined' && typeof opt.gridX !== 'undefined' && opt.gridX) {
+                //     // gridlines in x axis function
+                //     function make_x_gridlines() {
+                //         return d3.axisBottom(x2)
+                //             .ticks(10)
+                //
+                //
+                //     }
+                //     // add the X gridlines
+                //     svg.append("g")
+                //         .attr("class", "grid")
+                //         .attr("transform", "translate(0," + height + ")")
+                //         .call(make_x_gridlines()
+                //             .tickSize(-height)
+                //             .tickFormat("")
+                //         )
+                // }
+                // if (typeof opt !== 'undefined' && typeof opt.gridY !== 'undefined' && opt.gridY) {
+                //
+                //     // gridlines in y axis function
+                //     function make_y_gridlines() {
+                //         return d3.axisLeft(y)
+                //             .ticks(10)
+                //     }
+                //
+                //
+                //
+                //     // add the Y gridlines
+                //     svg.append("g")
+                //         .attr("class", "grid")
+                //         .call(make_y_gridlines()
+                //             .tickSize(-width)
+                //             .tickFormat("")
+                //         )
+                // }
+            }
+
+        }
+
         class Histogram {
             constructor(nBins, xMin, xMax) {
                 this.nBins = nBins;
@@ -100,7 +326,7 @@
 
             _initHistData() {
                 this.histData = new Array(this.nBins);
-                for (var i = 0; i < this.nBins; i++) {
+                for (let i = 0; i < this.nBins; i++) {
                     this.histData[i] = {
                         xLow: i * this.binSize + this.xMin,
                         xHigh: (i + 1) * this.binSize + this.xMin,
@@ -112,7 +338,7 @@
 
             fill(data) {
                 data.forEach((d) => {
-                    var bin = Math.floor((d - this.xMin) / this.binSize);
+                    let bin = Math.floor((d - this.xMin) / this.binSize);
                     if (bin >= 0 && bin < this.nBins) {
                         this.histData[bin].entries.push(d);
                         this.histData[bin].content++;
@@ -123,8 +349,8 @@
                 });
             }
 
-            _recreateSVG(divElement, width, height) {
-                d3.select(divElement).select("svg").remove();
+            _createSVG(divElement, width, height, append) {
+                if (!append) d3.select(divElement).select("svg").remove();
                 return d3.select(divElement).append("svg")
                     .attr("width", width + this.margin.left + this.margin.right)
                     .attr("height", height + this.margin.top + this.margin.bottom)
@@ -133,42 +359,42 @@
                         this.margin.top + ")");
             }
 
-            draw(divElement, width, height, opt) {
+            draw(divElement, width, height, append, opt) {
 
 
                 // put the graph in the "mpg" div
-                var svg = this._recreateSVG(divElement, width, height);
+                let svg = this._createSVG(divElement, width, height, append);
 
                 // This scale is for determining the widths of the histogram bars
                 // Must start at 0 or else x(binsize a.k.a dx) will be negative
-                var x = d3.scaleLinear()
+                let x = d3.scaleLinear()
                     .domain([0, (this.xMax) - (this.xMin)])
                     .range([0, width]);
 
                 // Scale for the placement of the bars
-                var x2 = d3.scaleLinear()
+                let x2 = d3.scaleLinear()
                     .domain([this.xMin, this.xMax])
                     .range([0, width]);
 
 
-                var y = d3.scaleLinear()
+                let y = d3.scaleLinear()
                     .domain([0, d3.max(this.histData, d => d.content + Math.sqrt(d.content))])
                     .range([height, 0]);
 
                 // set up the bars
-                var bar = svg.selectAll(".bar")
+                let bar = svg.selectAll(".bar")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "bar")
                     .attr("transform", d => "translate(" + x2(d.xLow + 0.01 * this.binSize) + "," + y(d.content) + ")")
 
-                var errH = svg.selectAll(".errH")
+                let errH = svg.selectAll(".errH")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "errH")
                     .attr("transform", d => "translate(" + x2(d.xLow) + "," + 0 + ")")
 
-                var dot = svg.selectAll(".dot")
+                let dot = svg.selectAll(".dot")
                     .data(this.histData)
                     .enter().append("g")
                     .attr("class", "dot")
@@ -283,16 +509,24 @@
 
         }
 
-        function generateHistogram() {
-            var data = d3.range(10000).map(d3.randomNormal(10, 1));
+        let dataX = d3.range(100);
+        let dataY = d3.range(100).map(d3.randomNormal(6, 0.2));
+        let dataErrX = d3.range(100).map(() => 0.1);
+        let dataErrY = d3.range(100).map(d3.randomNormal(0.5, 0.1));
 
-            let h = new Histogram(50, 5, 15);
+        let g = new Graph(dataX, dataY, dataErrX, dataErrY);
+        g.draw("#figure_graph", 600, 450);
+
+        function generateHistogram() {
+            let data = d3.range(100000).map(d3.randomNormal(10, 1));
+
+            let h = new Histogram(53, 5, 15);
             h.fill(data);
-            h.draw("#figure", 600, 450, {
-                fill: false,
-                errV: true,
-                errH: true,
-                marker: true,
+            h.draw("#figure", 600, 450, false, {
+                fill: true,
+                errV: false,
+                errH: false,
+                marker: false,
                 gridX: false,
                 gridY: false
             });
